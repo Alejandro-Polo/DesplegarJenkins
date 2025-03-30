@@ -77,14 +77,28 @@ resource "aws_instance" "jenkins" {
   associate_public_ip_address = true
 
   user_data = <<-EOF
-              #!/bin/bash
-              yum update -y
-              yum install -y docker
-              systemctl start docker
-              systemctl enable docker
-              usermod -aG docker ec2-user
-              docker run -d -p 8080:8080 -p 50000:50000 --name jenkins jenkins/jenkins:lts
-              EOF
+                #!/bin/bash
+                yum update -y
+                yum install -y docker
+                systemctl start docker
+                systemctl enable docker
+                usermod -aG docker ec2-user
+
+                # Iniciar Jenkins sin Setup Wizard
+                docker run -d -p 8080:8080 -p 50000:50000 \
+                --name jenkins \
+                -u root \
+                -v jenkins_home:/var/jenkins_home \
+                -e JAVA_OPTS="-Djenkins.install.runSetupWizard=false" \
+                jenkins/jenkins:lts
+
+                # Esperar a que Jenkins arranque
+                sleep 30
+
+                # Crear usuario administrador
+                docker exec jenkins bash -c 'echo "jenkins.model.Jenkins.instance.securityRealm.createAccount(\"admin\", \"admin123\")" | java -jar /var/jenkins_home/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080/ groovy ='
+                EOF
+
 
   tags = { Name = "jenkins_server" }
 }
